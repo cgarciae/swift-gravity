@@ -167,53 +167,61 @@ extension Collection where Element == String {
 
 let nObjects = CommandLine.arguments.getOption("n-objects").flatMap(Int.init) ?? 100
 let steps = CommandLine.arguments.getOption("steps").flatMap(Int.init) ?? 1000
+let device_str = CommandLine.arguments.getOption("device") ?? "gpu"
 let plot = CommandLine.arguments.getOption("plot") != nil
 let noSun = CommandLine.arguments.getOption("no-sun") != nil
+let noLines = CommandLine.arguments.getOption("no-line") != nil
 
-var all_objects = Tensor<Float>(numpy: np.concatenate([
-    np.array([[1.989e30] + [0, 0, 0] + [0, 0, 0]]), // sun
-    np.concatenate([
-        np.ones([nObjects, 1]) * PythonObject(5.972e24),
-        np.random.uniform(low: -149.6e9, high: 149.6e9, size: [nObjects, 3]),
-        np.random.uniform(low: -29785, high: 29785, size: [nObjects, 3]),
-    ], axis: 1),
-]).astype(np.float32))!
+let device: DeviceKind = device_str == "cpu" ? .cpu : .gpu
 
-if noSun {
-    all_objects = all_objects[1...]
-}
+withDevice(device) {
+    var all_objects = Tensor<Float>(numpy: np.concatenate([
+        np.array([[1.989e30] + [0, 0, 0] + [0, 0, 0]]), // sun
+        np.concatenate([
+            np.ones([nObjects, 1]) * PythonObject(5.972e28), // 5.972e24),
+            np.random.uniform(low: -149.6e9, high: 149.6e9, size: [nObjects, 3]),
+            np.random.uniform(low: -29785, high: 29785, size: [nObjects, 3]),
+        ], axis: 1),
+    ]).astype(np.float32))!
 
-print("Objects = \(all_objects.shape[0]), steps = \(steps), plot = \(plot)")
+    if noSun {
+        all_objects = all_objects[1...]
+    }
 
-let t0 = Date()
-let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
+    print("Objects = \(all_objects.shape[0]), steps = \(steps), plot = \(plot)")
 
-print("Time = \(Date().timeIntervalSince(t0))")
+    let t0 = Date()
+    let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
 
-if plot {
-    let n_bodies = all_objects.shape[0]
-    let tail = 1000
-    plt.ion()
+    print("Time = \(Date().timeIntervalSince(t0))")
 
-    for i in 0 ..< objects_array.shape[0] {
-        // print(objects_array.shape)
-        let objects_slice = objects_array[max(0, i - tail) ..< i + 1]
+    if plot {
+        let n_bodies = all_objects.shape[0]
+        let tail = 1000
+        plt.ion()
 
-        plt.clf()
-        plt.gca().set_aspect(1)
+        for i in 0 ..< objects_array.shape[0] {
+            // print(objects_array.shape)
+            let objects_slice = objects_array[max(0, i - tail) ..< i + 1]
 
-        for b in 0 ..< n_bodies {
-            // print(objects_slice.shape)
-            let xs = objects_slice[all(), b, 1]
-            let ys = objects_slice[all(), b, 2]
+            plt.clf()
+            plt.gca().set_aspect(1)
 
-            plt.plot(xs.makeNumpyArray(), ys.makeNumpyArray(), c: "k")
-            plt.scatter([xs.makeNumpyArray()[-1]], [ys.makeNumpyArray()[-1]], c: "b")
+            for b in 0 ..< n_bodies {
+                // print(objects_slice.shape)
+                let xs = objects_slice[all(), b, 1]
+                let ys = objects_slice[all(), b, 2]
+
+                if !noLines {
+                    plt.plot(xs.makeNumpyArray(), ys.makeNumpyArray(), c: "k")
+                }
+                plt.scatter([xs.makeNumpyArray()[-1]], [ys.makeNumpyArray()[-1]], c: "b")
+            }
+
+            plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
+            plt.ylim(-149.6e9 * 2, 149.6e9 * 2)
+            plt.draw()
+            plt.pause(0.01)
         }
-
-        plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
-        plt.ylim(-149.6e9 * 2, 149.6e9 * 2)
-        plt.draw()
-        plt.pause(0.1)
     }
 }
