@@ -1,3 +1,4 @@
+import Commander // @kylef
 import Foundation
 import Python
 import TensorFlow
@@ -165,63 +166,68 @@ extension Collection where Element == String {
     }
 }
 
-let nObjects = CommandLine.arguments.getOption("n-objects").flatMap(Int.init) ?? 100
-let steps = CommandLine.arguments.getOption("steps").flatMap(Int.init) ?? 1000
-let device_str = CommandLine.arguments.getOption("device") ?? "gpu"
-let plot = CommandLine.arguments.getOption("plot") != nil
-let noSun = CommandLine.arguments.getOption("no-sun") != nil
-let noLines = CommandLine.arguments.getOption("no-line") != nil
+let main = command(
+    Option("n-objects", default: 100),
+    Option("steps", default: 100),
+    Flag("plot"),
+    Option("device", default: "gpu"),
+    Flag("no-sun"),
+    Flag("no-lines")
+) { (nObjects: Int, steps: Int, plot: Bool, device_str: String, noSun: Bool, noLines: Bool) in
 
-let device: DeviceKind = device_str == "cpu" ? .cpu : .gpu
+    let device: DeviceKind = device_str == "cpu" ? .cpu : .gpu
 
-withDevice(device) {
-    var all_objects = Tensor<Float>(numpy: np.concatenate([
-        np.array([[1.989e30] + [0, 0, 0] + [0, 0, 0]]), // sun
-        np.concatenate([
-            np.ones([nObjects, 1]) * PythonObject(5.972e28), // 5.972e24),
-            np.random.uniform(low: -149.6e9, high: 149.6e9, size: [nObjects, 3]),
-            np.random.uniform(low: -29785, high: 29785, size: [nObjects, 3]),
-        ], axis: 1),
-    ]).astype(np.float32))!
+    withDevice(device) {
+        var all_objects = Tensor<Float>(numpy: np.concatenate([
+            np.array([[1.989e30] + [0, 0, 0] + [0, 0, 0]]), // sun
+            np.concatenate([
+                np.ones([nObjects, 1]) * PythonObject(5.972e28), // 5.972e24),
+                np.random.uniform(low: -149.6e9, high: 149.6e9, size: [nObjects, 3]),
+                np.random.uniform(low: -29785, high: 29785, size: [nObjects, 3]),
+            ], axis: 1),
+        ]).astype(np.float32))!
 
-    if noSun {
-        all_objects = all_objects[1...]
-    }
+        if noSun {
+            all_objects = all_objects[1...]
+        }
 
-    print("Objects = \(all_objects.shape[0]), steps = \(steps), plot = \(plot)")
+        print("Objects = \(all_objects.shape[0]), steps = \(steps), plot = \(plot), device = \(device)")
 
-    let t0 = Date()
-    let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
+        let t0 = Date()
+        let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
 
-    print("Time = \(Date().timeIntervalSince(t0))")
+        print("Time = \(Date().timeIntervalSince(t0))")
 
-    if plot {
-        let n_bodies = all_objects.shape[0]
-        let tail = 1000
-        plt.ion()
+        if plot {
+            let n_bodies = all_objects.shape[0]
+            let tail = 1000
+            plt.ion()
 
-        for i in 0 ..< objects_array.shape[0] {
-            // print(objects_array.shape)
-            let objects_slice = objects_array[max(0, i - tail) ..< i + 1]
+            for i in 0 ..< objects_array.shape[0] {
+                // print(objects_array.shape)
+                let objects_slice = objects_array[max(0, i - tail) ..< i + 1]
 
-            plt.clf()
-            plt.gca().set_aspect(1)
+                plt.clf()
+                plt.gca().set_aspect(1)
 
-            for b in 0 ..< n_bodies {
-                // print(objects_slice.shape)
-                let xs = objects_slice[all(), b, 1]
-                let ys = objects_slice[all(), b, 2]
+                for b in 0 ..< n_bodies {
+                    // print(objects_slice.shape)
+                    let xs = objects_slice[all(), b, 1]
+                    let ys = objects_slice[all(), b, 2]
 
-                if !noLines {
-                    plt.plot(xs.makeNumpyArray(), ys.makeNumpyArray(), c: "k")
+                    if !noLines {
+                        plt.plot(xs.makeNumpyArray(), ys.makeNumpyArray(), c: "k")
+                    }
+                    plt.scatter([xs.makeNumpyArray()[-1]], [ys.makeNumpyArray()[-1]], c: "b")
                 }
-                plt.scatter([xs.makeNumpyArray()[-1]], [ys.makeNumpyArray()[-1]], c: "b")
-            }
 
-            plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
-            plt.ylim(-149.6e9 * 2, 149.6e9 * 2)
-            plt.draw()
-            plt.pause(0.01)
+                plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
+                plt.ylim(-149.6e9 * 2, 149.6e9 * 2)
+                plt.draw()
+                plt.pause(0.01)
+            }
         }
     }
 }
+
+main.run()

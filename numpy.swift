@@ -1,3 +1,4 @@
+import Commander // @kylef
 import Foundation
 import Python
 
@@ -89,48 +90,57 @@ extension Collection where Element == String {
     }
 }
 
-let nObjects = CommandLine.arguments.getOption("n-objects").flatMap(Int.init) ?? 100
-let steps = CommandLine.arguments.getOption("steps").flatMap(Int.init) ?? 1000
-let plot = CommandLine.arguments.getOption("plot") != nil
+let main = command(
+    Option("n-objects", default: 100),
+    Option("steps", default: 100),
+    Flag("plot")
+) { (nObjects: Int, steps: Int, plot: Bool) in
 
-var all_objects = np.concatenate([
-    np.array([[1.989e30] + [0, 0, 0] + [0, 0, 0]], dtype: np.float32), // sun
-    np.concatenate([
-        np.ones([nObjects, 1]) * PythonObject(5.972e24),
-        np.random.uniform(low: -149.6e9, high: 149.6e9, size: [nObjects, 3]),
-        np.random.uniform(low: -29785, high: 29785, size: [nObjects, 3]),
-    ], axis: 1),
-])
+    // let nObjects = CommandLine.arguments.getOption("n-objects").flatMap(Int.init) ?? 100
+    // let steps = CommandLine.arguments.getOption("steps").flatMap(Int.init) ?? 1000
+    // let plot = CommandLine.arguments.getOption("plot") != nil
 
-print("Objects = \(all_objects.count), steps = \(steps), plot = \(plot)")
+    var all_objects = np.concatenate([
+        np.array([[1.989e30] + [0, 0, 0] + [0, 0, 0]], dtype: np.float32), // sun
+        np.concatenate([
+            np.ones([nObjects, 1]) * PythonObject(5.972e24),
+            np.random.uniform(low: -149.6e9, high: 149.6e9, size: [nObjects, 3]),
+            np.random.uniform(low: -29785, high: 29785, size: [nObjects, 3]),
+        ], axis: 1),
+    ])
 
-let t0 = Date()
-let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
+    print("Objects = \(all_objects.count), steps = \(steps), plot = \(plot)")
 
-print("Time = \(Date().timeIntervalSince(t0))")
+    let t0 = Date()
+    let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
 
-if plot {
-    let n_bodies = all_objects.count
-    let tail = 1000
-    plt.ion()
+    print("Time = \(Date().timeIntervalSince(t0))")
 
-    for i in 0 ..< objects_array.count {
-        let objects_slice = objects_array[slice(PythonObject(max(0, i - tail)), PythonObject(i + 1))]
+    if plot {
+        let n_bodies = all_objects.count
+        let tail = 1000
+        plt.ion()
 
-        plt.clf()
-        plt.gca().set_aspect(1)
+        for i in 0 ..< objects_array.count {
+            let objects_slice = objects_array[slice(PythonObject(max(0, i - tail)), PythonObject(i + 1))]
 
-        for b in 0 ..< n_bodies {
-            let xs = objects_slice[DOTS, b, 1]
-            let ys = objects_slice[DOTS, b, 2]
+            plt.clf()
+            plt.gca().set_aspect(1)
 
-            plt.plot(xs, ys, c: "k")
-            plt.scatter([xs[-1]], [ys[-1]], c: "b")
+            for b in 0 ..< n_bodies {
+                let xs = objects_slice[DOTS, b, 1]
+                let ys = objects_slice[DOTS, b, 2]
+
+                plt.plot(xs, ys, c: "k")
+                plt.scatter([xs[-1]], [ys[-1]], c: "b")
+            }
+
+            plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
+            plt.ylim(-149.6e9 * 2, 149.6e9 * 2)
+            plt.draw()
+            plt.pause(0.0001)
         }
-
-        plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
-        plt.ylim(-149.6e9 * 2, 149.6e9 * 2)
-        plt.draw()
-        plt.pause(0.0001)
     }
 }
+
+main.run()
