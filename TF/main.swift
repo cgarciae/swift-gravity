@@ -158,11 +158,41 @@ func simulation(_ objects: Tensor<Float>, steps: Int = 1000, h: Float = 0.01, re
 // CLI CODE
 ///////////////////////
 
-extension Collection where Element == String {
-    func getOption(_ option: String) -> String? {
-        return filter { $0.contains("--\(option)") }
-            .map { $0.replacingOccurrences(of: "--\(option)=", with: "") }
-            .first
+extension DeviceKind: ArgumentConvertible, LosslessStringConvertible {
+    public init(parser: ArgumentParser) throws {
+        if let value = parser.shift() {
+            if let device = DeviceKind(value) {
+                self = device
+            } else {
+                throw ArgumentError.invalidType(value: value, type: "DeviceKind", argument: nil)
+            }
+        } else {
+            throw ArgumentError.missingValue(argument: nil)
+        }
+    }
+
+    public var description: String {
+        switch self {
+        case .cpu:
+            return "cpu"
+        case .gpu:
+            return "gpu"
+        case .tpu:
+            return "tpu"
+        }
+    }
+
+    public init?(_ value: String) {
+        switch value {
+        case "cpu":
+            self = .cpu
+        case "gpu":
+            self = .gpu
+        case "tpu":
+            self = .tpu
+        default:
+            return nil
+        }
     }
 }
 
@@ -170,12 +200,10 @@ let main = command(
     Option("n-objects", default: 100),
     Option("steps", default: 100),
     Flag("plot"),
-    Option("device", default: "gpu"),
+    Option("device", default: .gpu),
     Flag("no-sun"),
     Flag("no-lines")
-) { (nObjects: Int, steps: Int, plot: Bool, device_str: String, noSun: Bool, noLines: Bool) in
-
-    let device: DeviceKind = device_str == "cpu" ? .cpu : .gpu
+) { (nObjects: Int, steps: Int, plot: Bool, device: DeviceKind, noSun: Bool, noLines: Bool) in
 
     withDevice(device) {
         var all_objects = Tensor<Float>(numpy: np.concatenate([

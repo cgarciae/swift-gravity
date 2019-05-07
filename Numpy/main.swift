@@ -1,4 +1,4 @@
-import Commander // @kylef
+import Commander
 import Foundation
 import Python
 
@@ -96,11 +96,7 @@ let main = command(
     Flag("plot")
 ) { (nObjects: Int, steps: Int, plot: Bool) in
 
-    // let nObjects = CommandLine.arguments.getOption("n-objects").flatMap(Int.init) ?? 100
-    // let steps = CommandLine.arguments.getOption("steps").flatMap(Int.init) ?? 1000
-    // let plot = CommandLine.arguments.getOption("plot") != nil
-
-    var all_objects = np.concatenate([
+    let all_objects = np.concatenate([
         np.array([[1.989e30] + [0, 0, 0] + [0, 0, 0]], dtype: np.float32), // sun
         np.concatenate([
             np.ones([nObjects, 1]) * PythonObject(5.972e24),

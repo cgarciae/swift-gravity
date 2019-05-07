@@ -1,4 +1,4 @@
-// import Commander
+import Commander
 import Foundation
 import Python
 
@@ -90,66 +90,63 @@ func simulation(_ objects: [Object], steps: Int = 1000, h: Float = 0.01, render_
     return objects_arrays
 }
 
-extension Collection where Element == String {
-    func getOption(_ option: String) -> String? {
-        return filter { $0.contains("--\(option)") }
-            .map { $0.replacingOccurrences(of: "--\(option)=", with: "") }
-            .first
-    }
-}
+let main = command(
+    Option("n-objects", default: 100),
+    Option("steps", default: 1000),
+    Flag("plot")
+) { (nObjects: Int, steps: Int, plot: Bool) in
 
-var nObjects = CommandLine.arguments.getOption("n-objects").flatMap(Int.init) ?? 100
-let steps = CommandLine.arguments.getOption("steps").flatMap(Int.init) ?? 1000
-var plot = CommandLine.arguments.getOption("plot") != nil
+    let sun = Object(mass: 1.989e30, position: [0, 0, 0], velocity: [0, 0, 0])
+    var all_objects = [sun]
 
-let sun = Object(mass: 1.989e30, position: [0, 0, 0], velocity: [0, 0, 0])
-var all_objects = [sun]
+    all_objects.append(contentsOf: (1 ... nObjects).map { _ in
+        Object(
+            mass: 5.972e24 * Float.random(in: 0.5 ... 1.5),
+            position: [
+                149.6e9 * (Bool.random() ? Float.random(in: 0.5 ... 1.5) : Float.random(in: -1.5 ... -0.5)),
+                149.6e9 * (Bool.random() ? Float.random(in: 0.5 ... 1.5) : Float.random(in: -1.5 ... -0.5)),
+                0,
+            ],
+            velocity: [
+                29785 * (Bool.random() ? Float.random(in: 0.5 ... 1.5) : Float.random(in: -1.5 ... -0.5)),
+                29785 * (Bool.random() ? Float.random(in: 0.5 ... 1.5) : Float.random(in: -1.5 ... -0.5)),
+                0,
+            ]
+        )
+    })
 
-all_objects.append(contentsOf: (1 ... nObjects).map { _ in
-    Object(
-        mass: 5.972e24 * Float.random(in: 0.5 ... 1.5),
-        position: [
-            149.6e9 * (Bool.random() ? Float.random(in: 0.5 ... 1.5) : Float.random(in: -1.5 ... -0.5)),
-            149.6e9 * (Bool.random() ? Float.random(in: 0.5 ... 1.5) : Float.random(in: -1.5 ... -0.5)),
-            0,
-        ],
-        velocity: [
-            29785 * (Bool.random() ? Float.random(in: 0.5 ... 1.5) : Float.random(in: -1.5 ... -0.5)),
-            29785 * (Bool.random() ? Float.random(in: 0.5 ... 1.5) : Float.random(in: -1.5 ... -0.5)),
-            0,
-        ]
-    )
-})
+    print("Objects = \(all_objects.count), steps = \(steps), plot = \(plot)")
 
-print("Objects = \(all_objects.count), steps = \(steps), plot = \(plot)")
+    let t0 = Date()
+    let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
 
-let t0 = Date()
-let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
+    print("Time = \(Date().timeIntervalSince(t0))")
 
-print("Time = \(Date().timeIntervalSince(t0))")
+    if plot {
+        let n_bodies = all_objects.count
+        let tail = 1000
+        plt.ion()
 
-if plot {
-    let n_bodies = all_objects.count
-    let tail = 1000
-    plt.ion()
+        for i in 0 ..< objects_array.count {
+            let objects_slice = objects_array[max(0, i - tail) ..< i + 1]
 
-    for i in 0 ..< objects_array.count {
-        let objects_slice = objects_array[max(0, i - tail) ..< i + 1]
+            plt.clf()
+            plt.gca().set_aspect(1)
 
-        plt.clf()
-        plt.gca().set_aspect(1)
+            for b in 0 ..< n_bodies {
+                let xs = objects_slice.map { $0[b].position[0] }
+                let ys = objects_slice.map { $0[b].position[1] }
 
-        for b in 0 ..< n_bodies {
-            let xs = objects_slice.map { $0[b].position[0] }
-            let ys = objects_slice.map { $0[b].position[1] }
+                plt.plot(xs, ys, c: "k")
+                plt.scatter([xs.last!], [ys.last!], c: "b")
+            }
 
-            plt.plot(xs, ys, c: "k")
-            plt.scatter([xs.last!], [ys.last!], c: "b")
+            plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
+            plt.ylim(-149.6e9 * 2, 149.6e9 * 2)
+            plt.draw()
+            plt.pause(0.0001)
         }
-
-        plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
-        plt.ylim(-149.6e9 * 2, 149.6e9 * 2)
-        plt.draw()
-        plt.pause(0.0001)
     }
 }
+
+main.run()
