@@ -135,23 +135,17 @@ func rk4(_ y: Tensor<Float>, _ f: (Tensor<Float>) -> Tensor<Float>, h: Float = 0
     return y + k
 }
 
-func simulation(_ objects: Tensor<Float>, steps: Int = 1000, h: Float = 0.01, render_steps _: Int = 1) -> Tensor<Float> {
+func simulation(_ objects: Tensor<Float>, steps: Int = 1000, h: Float = 0.01, render_steps _: Int = 1) -> PythonObject {
     var objects = objects
-    var objects_arrays: [Tensor<Float>] = []
+    var objects_arrays: [PythonObject] = []
 
     for _ in 0 ..< steps {
         objects = rk4(objects, gravity, h: h)
 
-        objects_arrays.append(objects.expandingShape(at: 0))
+        objects_arrays.append(objects.expandingShape(at: 0).makeNumpyArray())
     }
 
-    var output: Tensor<Float>?
-
-    withDevice(.cpu) {
-        output = Tensor(concatenating: objects_arrays, alongAxis: 0)
-    }
-
-    return output!
+    return np.concatenate(objects_arrays, axis: 0)
 }
 
 //////////////////////
@@ -231,7 +225,7 @@ let main = command(
             let tail = 1000
             plt.ion()
 
-            for i in 0 ..< objects_array.shape[0] {
+            for i in 0 ..< Int(objects_array.shape[0])! {
                 // print(objects_array.shape)
                 let objects_slice = objects_array[max(0, i - tail) ..< i + 1]
 
@@ -240,13 +234,13 @@ let main = command(
 
                 for b in 0 ..< n_bodies {
                     // print(objects_slice.shape)
-                    let xs = objects_slice[all(), b, 1]
-                    let ys = objects_slice[all(), b, 2]
+                    let xs = objects_slice[0..., b, 1]
+                    let ys = objects_slice[0..., b, 2]
 
                     if !noLines {
-                        plt.plot(xs.makeNumpyArray(), ys.makeNumpyArray(), c: "k")
+                        plt.plot(xs, ys, c: "k")
                     }
-                    plt.scatter([xs.makeNumpyArray()[-1]], [ys.makeNumpyArray()[-1]], c: "b")
+                    plt.scatter(xs[(-1)...], ys[(-1)...], c: "b")
                 }
 
                 plt.xlim(-149.6e9 * 2, 149.6e9 * 2)
