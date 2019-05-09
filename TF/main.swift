@@ -74,84 +74,6 @@ extension Tensor {
     }
 }
 
-//////////////////////////
-// begin simulation code
-//////////////////////////
-var eye: Tensor<Float>?
-func gravity(_ objects: Tensor<Float>) -> Tensor<Float> {
-    let nObjects = objects.shape[0]
-
-    if eye == nil {
-        let _eye = np.eye(nObjects, dtype: np.float32)
-        np.fill_diagonal(_eye, Float.infinity)
-        eye = Tensor(numpy: _eye)
-    }
-
-    var masses = objects[all(), at(0)]
-    masses = masses.expandingShape(at: 0)
-    masses = masses.expandingShape(at: 2)
-
-    let positions = objects[all(), range(1, 4)]
-    let velocities = objects[all(), range(4, 7)]
-
-    let positionsA = positions
-        .expandingShape(at: 0)
-        .tiled([nObjects, 1, 1])
-
-    let positionsB = positions
-        .expandingShape(at: 1)
-        .tiled([1, nObjects, 1])
-
-    // var positionsB = np.expand_dims(positions, axis: 1)
-    // positionsB = np.tile(positionsB, [1, nObjects, 1])
-
-    let pos_diff = positionsA - positionsB
-
-    var radius = sqrt(pos_diff.squared().sum(squeezingAxes: 2))
-
-    radius += eye!
-    radius = radius.expandingShape(at: 2)
-
-    var acc = G * masses * pos_diff / pow(radius, 3)
-    acc = acc.sum(squeezingAxes: 1)
-
-    return Tensor<Float>(concatenating: [
-        Tensor(zeros: [nObjects, 1]),
-        velocities,
-        acc,
-    ], alongAxis: 1)
-}
-
-func rk4(_ y: Tensor<Float>, _ f: (Tensor<Float>) -> Tensor<Float>, h: Float = 0.01) -> Tensor<Float> {
-    let k1 = h * f(y)
-    let k2 = h * f(y + k1 / 2)
-    let k3 = h * f(y + k2 / 2)
-    let k4 = h * f(y + k3)
-
-    var k = k1 + 2 * k2
-    k += 2 * k3 + k4
-    k /= 6
-
-    return y + k
-}
-
-func simulation(_ objects: Tensor<Float>, steps: Int = 1000, h: Float = 0.01, render_steps _: Int = 1) -> PythonObject {
-    var objects = objects
-    var objects_arrays: [PythonObject] = []
-
-    for _ in 0 ..< steps {
-        objects = rk4(objects, gravity, h: h)
-
-        objects_arrays.append(objects.expandingShape(at: 0).makeNumpyArray())
-    }
-
-    return np.concatenate(objects_arrays, axis: 0)
-}
-
-//////////////////////
-// CLI CODE
-///////////////////////
-
 extension DeviceKind: ArgumentConvertible, LosslessStringConvertible {
     public init(parser: ArgumentParser) throws {
         if let value = parser.shift() {
@@ -190,6 +112,9 @@ extension DeviceKind: ArgumentConvertible, LosslessStringConvertible {
     }
 }
 
+//////////////////////////
+// begin simulation code
+//////////////////////////
 let main = command(
     Option("n-objects", default: 100),
     Option("steps", default: 100),
@@ -198,6 +123,83 @@ let main = command(
     Flag("no-sun"),
     Flag("no-lines")
 ) { (nObjects: Int, steps: Int, plot: Bool, device: DeviceKind, noSun: Bool, noLines: Bool) in
+
+    var _eye: PythonObject
+
+    if noSun {
+        _eye = np.eye(nObjects, dtype: np.float32)
+    } else {
+        _eye = np.eye(nObjects + 1, dtype: np.float32)
+    }
+    np.fill_diagonal(_eye, Float.infinity)
+    let eye = Tensor<Float>(numpy: _eye)!
+
+    func gravity(_ objects: Tensor<Float>) -> Tensor<Float> {
+        let nObjects = objects.shape[0]
+
+        var masses = objects[all(), at(0)]
+        masses = masses.expandingShape(at: 0)
+        masses = masses.expandingShape(at: 2)
+
+        let positions = objects[all(), range(1, 4)]
+        let velocities = objects[all(), range(4, 7)]
+
+        let positionsA = positions
+            .expandingShape(at: 0)
+            .tiled([nObjects, 1, 1])
+
+        let positionsB = positions
+            .expandingShape(at: 1)
+            .tiled([1, nObjects, 1])
+
+        let pos_diff = positionsA - positionsB
+
+        var radius = sqrt(pos_diff.squared().sum(squeezingAxes: 2))
+
+        radius += eye
+        radius = radius.expandingShape(at: 2)
+
+        var acc = G * masses * pos_diff / pow(radius, 3)
+        acc = acc.sum(squeezingAxes: 1)
+
+        return Tensor<Float>(concatenating: [
+            Tensor(zeros: [nObjects, 1]),
+            velocities,
+            acc,
+        ], alongAxis: 1)
+    }
+
+    func rk4(_ y: Tensor<Float>, _ f: (Tensor<Float>) -> Tensor<Float>, h: Float = 0.01) -> Tensor<Float> {
+        let k1 = h * f(y)
+        let k2 = h * f(y + k1 / 2)
+        let k3 = h * f(y + k2 / 2)
+        let k4 = h * f(y + k3)
+
+        var k = k1 + 2 * k2
+        k += 2 * k3 + k4
+        k /= 6
+
+        return y + k
+    }
+
+    func simulation(_ objects: Tensor<Float>, steps: Int = 1000, h: Float = 0.01, render_steps _: Int = 1) -> [Tensor<Float>] {
+        var objects = objects
+        var objects_arrays: [Tensor<Float>] = []
+
+        for _ in 0 ..< steps {
+            objects = rk4(objects, gravity, h: h)
+
+            withDevice(.cpu) {
+                objects_arrays.append(objects.expandingShape(at: 0))
+            }
+        }
+
+        return objects_arrays
+    }
+
+    //////////////////////
+    // CLI CODE
+    ///////////////////////
 
     withDevice(device) {
         var all_objects = Tensor<Float>(numpy: np.concatenate([
@@ -216,7 +218,10 @@ let main = command(
         print("Objects = \(all_objects.shape[0]), steps = \(steps), plot = \(plot), device = \(device)")
 
         let t0 = Date()
-        let objects_array = simulation(all_objects, steps: steps, h: 80000, render_steps: 10)
+        let objects_array = Tensor(
+            concatenating: simulation(all_objects, steps: steps, h: 80000, render_steps: 10),
+            alongAxis: 0
+        ).makeNumpyArray()
 
         print("Time = \(Date().timeIntervalSince(t0))")
 
