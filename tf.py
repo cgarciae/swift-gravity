@@ -4,9 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import fire
 from time import time
+import os
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 G = 6.67408e-11
-eye = None
 
 
 #############
@@ -109,7 +111,7 @@ def main(
             all_objects = all_objects[1:]
 
         print(
-            f"Objects = {all_objects.shape[0]}, steps = {steps}, plot = {plot}, device = {device}, no-lines = {no_lines}"
+            f"Objects = {all_objects.shape[0]}, steps = {steps}, plot = {plot}, device = {device}, no-lines = {no_lines}, tf-function = {tf_function}"
         )
 
         t0 = time()
