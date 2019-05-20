@@ -74,41 +74,16 @@ extension Tensor {
     }
 }
 
-extension DeviceKind: ArgumentConvertible, LosslessStringConvertible {
-    public init(parser: ArgumentParser) throws {
-        if let value = parser.shift() {
-            if let device = DeviceKind(value) {
-                self = device
-            } else {
-                throw ArgumentError.invalidType(value: value, type: "DeviceKind", argument: nil)
-            }
-        } else {
-            throw ArgumentError.missingValue(argument: nil)
-        }
-    }
-
-    public var description: String {
-        switch self {
-        case .cpu:
-            return "cpu"
-        case .gpu:
-            return "gpu"
-        case .tpu:
-            return "tpu"
-        }
-    }
-
-    public init?(_ value: String) {
-        switch value {
-        case "cpu":
-            self = .cpu
-        case "gpu":
-            self = .gpu
-        case "tpu":
-            self = .tpu
-        default:
-            return nil
-        }
+func get_device(_ value: String) -> DeviceKind? {
+    switch value {
+    case "cpu":
+        return .cpu
+    case "gpu":
+        return .gpu
+    case "tpu":
+        return .tpu
+    default:
+        return nil
     }
 }
 
@@ -119,10 +94,12 @@ let main = command(
     Option("n-objects", default: 100),
     Option("steps", default: 100),
     Flag("plot"),
-    Option("device", default: .gpu),
+    Option("device", default: "gpu"),
     Flag("no-sun"),
     Flag("no-lines")
-) { (nObjects: Int, steps: Int, plot: Bool, device: DeviceKind, noSun: Bool, noLines: Bool) in
+) { (nObjects: Int, steps: Int, plot: Bool, device: String, noSun: Bool, noLines: Bool) in
+
+    let device = get_device(device)!
 
     var _eye: PythonObject
 
@@ -137,12 +114,12 @@ let main = command(
     func gravity(_ objects: Tensor<Float>) -> Tensor<Float> {
         let nObjects = objects.shape[0]
 
-        var masses = objects[all(), at(0)]
+        var masses = objects[0..., 0]
         masses = masses.expandingShape(at: 0)
         masses = masses.expandingShape(at: 2)
 
-        let positions = objects[all(), range(1, 4)]
-        let velocities = objects[all(), range(4, 7)]
+        let positions = objects[0..., range(1, 4)]
+        let velocities = objects[0..., range(4, 7)]
 
         let positionsA = positions
             .expandingShape(at: 0)
@@ -231,14 +208,12 @@ let main = command(
             plt.ion()
 
             for i in 0 ..< Int(objects_array.shape[0])! {
-                // print(objects_array.shape)
                 let objects_slice = objects_array[max(0, i - tail) ..< i + 1]
 
                 plt.clf()
                 plt.gca().set_aspect(1)
 
                 for b in 0 ..< n_bodies {
-                    // print(objects_slice.shape)
                     let xs = objects_slice[0..., b, 1]
                     let ys = objects_slice[0..., b, 2]
 

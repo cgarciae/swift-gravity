@@ -9,11 +9,13 @@ let package = Package(
         .executable(name: "Pure", targets: ["Pure"]),
         .executable(name: "Numpy", targets: ["Numpy"]),
         .executable(name: "TF", targets: ["TF"]),
+        .executable(name: "Benchmarks", targets: ["Benchmarks"]),
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
         // .package(url: /* package url */, from: "1.0.0"),
         .package(url: "https://github.com/kylef/Commander.git", from: "0.0.0"),
+        .package(url: "https://github.com/jkandzi/Progress.swift", from: "0.0.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package. A target can define a module or a test suite.
@@ -21,5 +23,6 @@ let package = Package(
         .target(name: "Pure", dependencies: ["Commander"], path: "Pure"),
         .target(name: "Numpy", dependencies: ["Commander"], path: "Numpy"),
         .target(name: "TF", dependencies: ["Commander"], path: "TF"),
+        .target(name: "Benchmarks", dependencies: ["Commander", "Progress"], path: "Benchmarks"),
     ]
 )
